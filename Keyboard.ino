@@ -12,13 +12,12 @@ std::array<int, numCols> cols = {2, 3, 4, 5, 10};
 std::array<int, numRows> rows = {6, 7, 8, 9};
 std::array<byte, numCols * numRows> buttonState;
 
-std::map<int, KeyboardKeycode> buttonMapping = {
-    {17, KEY_0},
-    {3, KEYPAD_DOT},
-    {16, KEYPAD_1},
-    {18, KEYPAD_2},
-    {19, KEYPAD_3}
-};
+std::map<int, KeyboardKeycode> buttonMapping = {{17, KEY_0}, {3, KEYPAD_DOT}, {16, KEYPAD_1},
+    {18, KEYPAD_2}, {19, KEYPAD_3}, {15, KEYPAD_4}, {11, KEYPAD_5}, {7, KEYPAD_6}, {14, KEYPAD_7},
+    {10, KEYPAD_8}, {6, KEYPAD_9}, {2, KEYPAD_ENTER}, {1, KEYPAD_ADD}, {0, KEYPAD_SUBTRACT},
+    {9, KEYPAD_DIVIDE}, {5, KEYPAD_MULTIPLY}};
+
+std::map<int, ConsumerKeycode> consumerMapping = {{13, CONSUMER_CALCULATOR}};
 
 namespace pins
 {
@@ -30,18 +29,20 @@ const int joyBtn = 15;
 
 void setup()
 {
-    out::cout.Init();
+    if (out::Enabled) {
+        out::cout.Init();
+    }
 
-    for (auto row: rows) {
-        out::cout << row << " as input";
+    for (auto row : rows) {
+        out::cout << row << F(" as input");
         pinMode(row, INPUT);
     }
 
-    for (auto col: cols) {
-        out::cout << col << " as input-pullup";
+    for (auto col : cols) {
+        out::cout << col << F(" as input-pullup");
         pinMode(col, INPUT_PULLUP);
     }
-    for (auto& btn: buttonState) {
+    for (auto& btn : buttonState) {
         btn = HIGH;
     }
     pinMode(pins::potentiometer, INPUT);
@@ -55,19 +56,28 @@ void setup()
 
 void onKeyDown(int idx)
 {
-    out::cout << "Pressed " << idx << out::endl;
+    out::cout << F("Pressed ") << idx << out::endl;
     if (buttonMapping.count(idx) > 0) {
         auto key = buttonMapping[idx];
-        out::cout << "Sending " << key << " " << KeyboardKeycode((uint8_t)(key & 0xFF)) << out::endl;
+        out::cout << F("Sending ") << key << F(" ") << KeyboardKeycode((uint8_t)(key & 0xFF))
+                  << out::endl;
         Keyboard.press(key);
+    } else if (consumerMapping.count(idx) > 0) {
+        Consumer.write(consumerMapping[idx]);
     }
 }
 
 void onKeyUp(int idx)
 {
-    out::cout << "Released " << idx << out::endl;
+    out::cout << F("Released ") << idx << out::endl;
     if (buttonMapping.count(idx) > 0) {
         Keyboard.release(buttonMapping[idx]);
+    }
+    if (idx == 4) {
+        out::Enabled = !out::Enabled;
+        if (out::Enabled) {
+            out::cout.Init();
+        }
     }
 }
 
@@ -88,13 +98,13 @@ void readMatrix()
 {
     int buttonIdx = 0;
     // iterate the columns
-    for (auto col: cols) {
+    for (auto col : cols) {
         // col: set to output to low
         pinMode(col, OUTPUT);
         digitalWrite(col, LOW);
 
         // row: interate through the rows
-        for (auto row: rows) {
+        for (auto row : rows) {
             pinMode(row, INPUT_PULLUP);
             processButton(buttonIdx++, digitalRead(row));
             pinMode(row, INPUT);
@@ -108,13 +118,13 @@ void printMatrix()
 {
     return;
     int buttonIdx = 0;
-    for (auto row: rows) {
+    for (auto row : rows) {
         if (row < 10) {
             out::cout << F("0");
         }
         out::cout << row << F(": ");
 
-        for (auto col: cols) {
+        for (auto col : cols) {
             out::cout << buttonState.at(buttonIdx++) << F(", ");
         }
         out::cout << out::endl;
@@ -141,7 +151,7 @@ void checkMouse()
     dMouseX += dJoyX * 10.0;
     dMouseY += dJoyY * 10.0;
     if (fabs(dJoyX) > 0.01 || fabs(dJoyY) > 0.01) {
-        out::cout << joyX << "(" << dJoyX << "), " << joyY << "(" << dJoyY << ") "
+        out::cout << joyX << F("(") << dJoyX << F("), F(") << joyY << F(")(") << dJoyY << F(") ")
                   << digitalRead(pins::joyBtn) << out::endl;
     }
     if (static_cast<decltype(mouseX)>(dMouseX) != mouseX) {
@@ -174,21 +184,25 @@ void checkVolume()
     double deltaVolume = volume - targetVolume;
     int steps = fabs(deltaVolume) / 0.02;
     while (fabs(volume - targetVolume) > 0.04) {
-        out::cout << "From " << volume << " To " << targetVolume;
+        out::cout << F("From ") << volume << F(" To ") << targetVolume;
         if (volume < targetVolume) {
-            Consumer.write(MEDIA_VOLUME_UP);
+            Consumer.press(MEDIA_VOLUME_UP);
+            delay(10);
+            Consumer.release(MEDIA_VOLUME_UP);
             downs = 0;
             ++ups;
-            out::cout << " Up " << ups << out::endl;
+            out::cout << F(" Up ") << ups << out::endl;
             volume += 0.02;
-            delay(5);
+            delay(10);
         } else {
-            Consumer.write(MEDIA_VOLUME_DOWN);
+            Consumer.press(MEDIA_VOLUME_DOWN);
+            delay(10);
+            Consumer.release(MEDIA_VOLUME_DOWN);
             ups = 0;
             ++downs;
-            out::cout << " Down " << downs << out::endl;
+            out::cout << F(" Down ") << downs << out::endl;
             volume -= 0.02;
-            delay(5);
+            delay(10);
         }
     }
 }
@@ -218,7 +232,7 @@ struct ScheduledFunction
 };
 
 ScheduledFunction scheduledFuncs[] = {
-    {&checkVolume, 100, 0}, {&blinkLed, 1000, 0}, {&printMatrix, 100, 0}};
+    {&readMatrix, 1, 0}, {&checkVolume, 100, 0}, {&blinkLed, 1000, 0}, {&printMatrix, 100, 0}};
 
 void loop()
 {
@@ -229,5 +243,4 @@ void loop()
             scheduledFuncs[i].last = currTime;
         }
     }
-    readMatrix();
 }

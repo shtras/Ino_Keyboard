@@ -6,4 +6,5 @@ namespace out
 {
 Endl endl;
 Cout cout;
+bool Enabled = false;
 } // namespace out

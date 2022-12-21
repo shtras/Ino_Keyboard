@@ -1,7 +1,7 @@
 #pragma once
 #include "HID-Project.h"
 
-#define USE_SERIAL
+//#define USE_SERIAL
 
 namespace out
 {
@@ -9,6 +9,8 @@ class Endl
 {
 };
 extern Endl endl;
+
+extern bool Enabled;
 
 class Cout
 {
@@ -24,7 +26,9 @@ public:
     Cout& operator<<(Endl&)
     {
 #ifdef USE_SERIAL
-        Serial.println();
+        if (Enabled) {
+            Serial.println();
+        }
 #endif
         return *this;
     }
@@ -32,7 +36,9 @@ public:
     Cout& operator<<(const T& t)
     {
 #ifdef USE_SERIAL
-        Serial.print(t);
+        if (Enabled) {
+            Serial.print(t);
+        }
 #endif
         return *this;
     }
