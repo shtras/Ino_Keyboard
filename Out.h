@@ -1,7 +1,7 @@
 #pragma once
 #include "HID-Project.h"
 
-//#define USE_SERIAL
+#define USE_SERIAL
 
 namespace out
 {

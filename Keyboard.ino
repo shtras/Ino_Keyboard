@@ -1,16 +1,24 @@
 #include "HID-Project.h"
+
+#include <ArduinoSTL.h>
+
 #include "Out.h"
-// Keyboard Matrix Tutorial Example
-// baldengineer.com
-// CC BY-SA 4.0
+#include <array>
+#include <map>
 
-// JP1 is an input
-byte rows[] = {2, 3, 4};
-const int rowCount = sizeof(rows) / sizeof(rows[0]);
+constexpr int numCols = 5;
+constexpr int numRows = 4;
+std::array<int, numCols> cols = {2, 3, 4, 5, 10};
+std::array<int, numRows> rows = {6, 7, 8, 9};
+std::array<byte, numCols * numRows> buttonState;
 
-// JP2 and JP3 are outputs
-byte cols[] = {8, 9, 10};
-const int colCount = sizeof(cols) / sizeof(cols[0]);
+std::map<int, KeyboardKeycode> buttonMapping = {
+    {17, KEY_0},
+    {3, KEYPAD_DOT},
+    {16, KEYPAD_1},
+    {18, KEYPAD_2},
+    {19, KEYPAD_3}
+};
 
 namespace pins
 {
@@ -20,65 +28,100 @@ const int joyY = A1;
 const int joyBtn = 15;
 } // namespace pins
 
-byte keys[colCount][rowCount];
-
 void setup()
 {
     out::cout.Init();
 
-    for (int x = 0; x < rowCount; x++) {
-        out::cout << rows[x] << " as input";
-        pinMode(rows[x], INPUT);
+    for (auto row: rows) {
+        out::cout << row << " as input";
+        pinMode(row, INPUT);
     }
 
-    for (int x = 0; x < colCount; x++) {
-        out::cout << cols[x] << " as input-pullup";
-        pinMode(cols[x], INPUT_PULLUP);
+    for (auto col: cols) {
+        out::cout << col << " as input-pullup";
+        pinMode(col, INPUT_PULLUP);
+    }
+    for (auto& btn: buttonState) {
+        btn = HIGH;
     }
     pinMode(pins::potentiometer, INPUT);
     pinMode(pins::joyBtn, INPUT_PULLUP);
     pinMode(pins::joyX, INPUT);
     pinMode(pins::joyY, INPUT);
     Mouse.begin();
+    Keyboard.begin();
+    Consumer.begin();
+}
+
+void onKeyDown(int idx)
+{
+    out::cout << "Pressed " << idx << out::endl;
+    if (buttonMapping.count(idx) > 0) {
+        auto key = buttonMapping[idx];
+        out::cout << "Sending " << key << " " << KeyboardKeycode((uint8_t)(key & 0xFF)) << out::endl;
+        Keyboard.press(key);
+    }
+}
+
+void onKeyUp(int idx)
+{
+    out::cout << "Released " << idx << out::endl;
+    if (buttonMapping.count(idx) > 0) {
+        Keyboard.release(buttonMapping[idx]);
+    }
+}
+
+void processButton(int idx, int value)
+{
+    if (buttonState.at(idx) == value) {
+        return;
+    }
+    buttonState[idx] = value;
+    if (value == LOW) {
+        onKeyDown(idx);
+    } else {
+        onKeyUp(idx);
+    }
 }
 
 void readMatrix()
 {
+    int buttonIdx = 0;
     // iterate the columns
-    for (int colIndex = 0; colIndex < colCount; colIndex++) {
+    for (auto col: cols) {
         // col: set to output to low
-        byte curCol = cols[colIndex];
-        pinMode(curCol, OUTPUT);
-        digitalWrite(curCol, LOW);
+        pinMode(col, OUTPUT);
+        digitalWrite(col, LOW);
 
         // row: interate through the rows
-        for (int rowIndex = 0; rowIndex < rowCount; rowIndex++) {
-            byte rowCol = rows[rowIndex];
-            pinMode(rowCol, INPUT_PULLUP);
-            keys[colIndex][rowIndex] = digitalRead(rowCol);
-            pinMode(rowCol, INPUT);
+        for (auto row: rows) {
+            pinMode(row, INPUT_PULLUP);
+            processButton(buttonIdx++, digitalRead(row));
+            pinMode(row, INPUT);
         }
         // disable the column
-        pinMode(curCol, INPUT);
+        pinMode(col, INPUT);
     }
 }
 
 void printMatrix()
 {
-    for (int rowIndex = 0; rowIndex < rowCount; rowIndex++) {
-        if (rowIndex < 10)
+    return;
+    int buttonIdx = 0;
+    for (auto row: rows) {
+        if (row < 10) {
             out::cout << F("0");
-        out::cout << rowIndex << F(": ");
+        }
+        out::cout << row << F(": ");
 
-        for (int colIndex = 0; colIndex < colCount; colIndex++) {
-            out::cout << keys[colIndex][rowIndex];
-            if (colIndex < colCount)
-                out::cout << F(", ");
+        for (auto col: cols) {
+            out::cout << buttonState.at(buttonIdx++) << F(", ");
         }
         out::cout << out::endl;
     }
     out::cout << out::endl;
 }
+
 int lastVal = 1024;
 double volume = 1.0;
 int ups = 0;
@@ -175,7 +218,7 @@ struct ScheduledFunction
 };
 
 ScheduledFunction scheduledFuncs[] = {
-    {&checkMouse, 10, 0}, {&checkVolume, 100, 0}, {&blinkLed, 1000, 0}};
+    {&checkVolume, 100, 0}, {&blinkLed, 1000, 0}, {&printMatrix, 100, 0}};
 
 void loop()
 {
@@ -186,5 +229,5 @@ void loop()
             scheduledFuncs[i].last = currTime;
         }
     }
-    //delay(1000);
+    readMatrix();
 }
