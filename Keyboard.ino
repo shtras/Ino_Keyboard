@@ -22,8 +22,8 @@ std::map<int, ConsumerKeycode> consumerMapping = {{13, CONSUMER_CALCULATOR}};
 namespace pins
 {
 const int potentiometer = A0;
-const int joyX = A2;
-const int joyY = A1;
+const int joyX = A1;
+const int joyY = A2;
 const int joyBtn = 15;
 } // namespace pins
 
@@ -67,6 +67,16 @@ void onKeyDown(int idx)
     }
 }
 
+void uname()
+{
+    Keyboard.print("");
+}
+
+void pwd()
+{
+    Keyboard.print("");
+}
+
 void onKeyUp(int idx)
 {
     out::cout << F("Released ") << idx << out::endl;
@@ -74,10 +84,17 @@ void onKeyUp(int idx)
         Keyboard.release(buttonMapping[idx]);
     }
     if (idx == 4) {
-        out::Enabled = !out::Enabled;
-        if (out::Enabled) {
-            out::cout.Init();
-        }
+        //out::Enabled = !out::Enabled;
+        //if (out::Enabled) {
+        //    out::cout.Init();
+        //}
+        Consumer.press(MEDIA_VOLUME_MUTE);
+        delay(10);
+        Consumer.release(MEDIA_VOLUME_MUTE);
+    } else if (idx == 8) {
+        pwd();
+    } else if (idx == 12) {
+        uname();
     }
 }
 
@@ -144,26 +161,6 @@ bool mouseClicked = false;
 
 void checkMouse()
 {
-    int joyX = analogRead(pins::joyX);
-    int joyY = analogRead(pins::joyY);
-    double dJoyX = pow((joyX - 500) / 512.0, 3);
-    double dJoyY = pow((joyY - 500) / 512.0, 3);
-    dMouseX += dJoyX * 10.0;
-    dMouseY += dJoyY * 10.0;
-    if (fabs(dJoyX) > 0.01 || fabs(dJoyY) > 0.01) {
-        out::cout << joyX << F("(") << dJoyX << F("), F(") << joyY << F(")(") << dJoyY << F(") ")
-                  << digitalRead(pins::joyBtn) << out::endl;
-    }
-    if (static_cast<decltype(mouseX)>(dMouseX) != mouseX) {
-        int offset = static_cast<decltype(mouseX)>(dMouseX) - mouseX;
-        Mouse.move(-offset, 0);
-        mouseX = static_cast<decltype(mouseX)>(dMouseX);
-    }
-    if (static_cast<decltype(mouseY)>(dMouseY) != mouseY) {
-        int offset = static_cast<decltype(mouseY)>(dMouseY) - mouseY;
-        Mouse.move(0, -offset);
-        mouseY = static_cast<decltype(mouseY)>(dMouseY);
-    }
     if (digitalRead(pins::joyBtn) == LOW) {
         if (!mouseClicked) {
             Mouse.press();
@@ -175,11 +172,31 @@ void checkMouse()
             mouseClicked = false;
         }
     }
+
+    int joyX = analogRead(pins::joyX);
+    int joyY = analogRead(pins::joyY);
+    double dJoyX = pow((joyX - 498) / 512.0, 1);
+    double dJoyY = pow((joyY - 498) / 512.0, 1);
+    if (fabs(dJoyX) < 0.01 && fabs(dJoyY) < 0.01) {
+        return;
+    }
+    dMouseX += dJoyX * -10.0;
+    dMouseY += dJoyY * 10.0;
+    if (static_cast<decltype(mouseX)>(dMouseX) != mouseX) {
+        int offset = static_cast<decltype(mouseX)>(dMouseX) - mouseX;
+        Mouse.move(-offset, 0);
+        mouseX = static_cast<decltype(mouseX)>(dMouseX);
+    }
+    if (static_cast<decltype(mouseY)>(dMouseY) != mouseY) {
+        int offset = static_cast<decltype(mouseY)>(dMouseY) - mouseY;
+        Mouse.move(0, -offset);
+        mouseY = static_cast<decltype(mouseY)>(dMouseY);
+    }
 }
 
 void checkVolume()
 {
-    int val = analogRead(pins::potentiometer);
+    int val = abs(1024 - analogRead(pins::potentiometer));
     double targetVolume = val / 1024.0;
     double deltaVolume = volume - targetVolume;
     int steps = fabs(deltaVolume) / 0.02;
@@ -231,8 +248,8 @@ struct ScheduledFunction
     unsigned long last;
 };
 
-ScheduledFunction scheduledFuncs[] = {
-    {&readMatrix, 1, 0}, {&checkVolume, 100, 0}, {&blinkLed, 1000, 0}, {&printMatrix, 100, 0}};
+ScheduledFunction scheduledFuncs[] = {{&readMatrix, 1, 0}, {&checkVolume, 100, 0},
+    {&blinkLed, 1000, 0}, {&printMatrix, 100, 0}, {&checkMouse, 10, 0}};
 
 void loop()
 {
