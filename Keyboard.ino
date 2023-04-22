@@ -305,28 +305,65 @@ void blinkLed()
 }
 
 decode_results results;
+uint16_t lastCommand = 0;
+uint16_t commandRepeat = 0;
+
+struct IrGuard
+{
+public:
+    explicit IrGuard(uint16_t command)
+        : command_(command)
+    {
+    }
+    ~IrGuard()
+    {
+        IrReceiver.resume();
+        lastCommand = command_;
+    }
+
+private:
+    uint16_t command_ = 0;
+};
 
 void checkIR()
 {
+    constexpr int continuousThreshold = 1;
+    constexpr int singleThreshold = 2;
     if (!IrReceiver.decode()) {
         return;
     }
     const auto& data = IrReceiver.decodedIRData;
+    IrGuard guard(data.command);
     bool repeat = data.flags & IRDATA_FLAGS_IS_REPEAT;
-    switch (data.command) {
-        case 0x46:
-            volume::targetVolume += 0.02;
-            break;
-        case 0x15:
-            volume::targetVolume -= 0.02;
-            break;
+    out::cout << out::hex << data.command << " " << lastCommand << " " << out::dec << commandRepeat
+              << " " << repeat << out::endl;
+
+    if (data.command != lastCommand) {
+        commandRepeat = 0;
+        return;
     }
-    if (!repeat && irMapping.count(data.command) > 0) {
-        Consumer.write(irMapping[data.command]);
+    if (!repeat) {
+        commandRepeat = 0;
     }
-    out::cout << out::hex << data.command << " " << out::dec
-              << (data.flags & IRDATA_FLAGS_IS_REPEAT) << out::endl;
-    IrReceiver.resume();
+    ++commandRepeat;
+    if (commandRepeat >= continuousThreshold) {
+        out ::cout << "Continuous" << out::endl;
+        switch (data.command) {
+            case 0x46:
+                volume::targetVolume += 0.02;
+                break;
+            case 0x15:
+                volume::targetVolume -= 0.02;
+                break;
+        }
+    }
+    if (commandRepeat == singleThreshold) {
+        out::cout << "Single" << out::endl;
+        if (irMapping.count(data.command) > 0) {
+            setLeds(255, 100);
+            Consumer.write(irMapping[data.command]);
+        }
+    }
 }
 
 struct ScheduledFunction

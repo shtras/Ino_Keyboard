@@ -36,6 +36,7 @@ public:
     Cout& operator<<(Endl&)
     {
 #ifdef USE_SERIAL
+        mode = Mode::Dec;
         if (Enabled) {
             Serial.println();
         }
@@ -44,12 +45,16 @@ public:
     }
     Cout& operator<<(Hex&)
     {
+#ifdef USE_SERIAL
         mode = Mode::Hex;
         return *this;
+#endif
     }
     Cout& operator<<(Dec&)
     {
+#ifdef USE_SERIAL
         mode = Mode::Dec;
+#endif
         return *this;
     }
     template <typename T>
@@ -64,12 +69,16 @@ public:
     }
     Cout& operator<<(const int& t)
     {
+#ifdef USE_SERIAL
         print(t);
+#endif
         return *this;
     }
     Cout& operator<<(const uint16_t& t)
     {
+#ifdef USE_SERIAL
         print(t);
+#endif
         return *this;
     }
 
