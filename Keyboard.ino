@@ -175,6 +175,21 @@ double getTargetVolume()
     return targetVolume;
 }
 
+std::array<int, 8> ledAnimation = {0};
+int ledAnimationCounter = 0;
+int ledAnimationLength = 0;
+int ledAnimationTimeout = 0;
+
+void setLedAnimation(std::array<int, 8> animation, int length, int timeout)
+{
+    for (int i=0; i<length; ++i) {
+        ledAnimation[i] = animation[i];
+    }
+    ledAnimationLength = length;
+    ledAnimationCounter = 0;
+    ledAnimationTimeout = timeout;
+}
+
 unsigned long ledTimeout = 0;
 int persistentLedValue = 0;
 void setLeds(int value, int timeout)
@@ -187,6 +202,21 @@ void setLeds(int value, int timeout)
     } else {
         persistentLedValue = value;
         ledTimeout = 0;
+    }
+}
+
+void blinkLed()
+{
+    if (ledAnimationTimeout) {
+        if (ledAnimationCounter >= ledAnimationLength) {
+            ledAnimationTimeout = 0;
+            return;
+        }
+        setLeds(ledAnimation[ledAnimationCounter++], ledAnimationTimeout);
+        return;
+    }
+    if (ledTimeout && ledTimeout < millis()) {
+        setLeds(persistentLedValue, 0);
     }
 }
 
@@ -285,25 +315,6 @@ void encoderISR()
     interrupts();
 }
 
-void blinkLed()
-{
-#if 0
-    static bool lit = false;
-    if (lit) {
-        digitalWrite(LED_BUILTIN_RX, HIGH);
-        digitalWrite(LED_BUILTIN_TX, LOW);
-    } else {
-        //digitalWrite(LED_BUILTIN, HIGH);
-        digitalWrite(LED_BUILTIN_RX, LOW);
-        digitalWrite(LED_BUILTIN_TX, HIGH);
-    }
-    lit = !lit;
-#endif
-    if (ledTimeout && ledTimeout < millis()) {
-        setLeds(persistentLedValue, 0);
-    }
-}
-
 decode_results results;
 uint16_t lastCommand = 0;
 uint16_t commandRepeat = 0;
@@ -360,7 +371,7 @@ void checkIR()
     if (commandRepeat == singleThreshold) {
         out::cout << "Single" << out::endl;
         if (irMapping.count(data.command) > 0) {
-            setLeds(255, 100);
+            setLedAnimation({129,66,36,24,36,66,129, 0}, 7, 200);
             Consumer.write(irMapping[data.command]);
         }
     }
@@ -375,7 +386,7 @@ struct ScheduledFunction
 };
 
 ScheduledFunction scheduledFuncs[] = {{&readMatrix, 1, 0}, {&checkVolume, 100, 0},
-    {&blinkLed, 1000, 0}, {&printMatrix, 100, 0}, {&checkLocks, 100, 0}, {&checkIR, 100, 0}};
+    {&blinkLed, 150, 0}, {&printMatrix, 100, 0}, {&checkLocks, 100, 0}, {&checkIR, 100, 0}};
 
 void loop()
 {
