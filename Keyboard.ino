@@ -1,4 +1,5 @@
 #include "HID-Project.h"
+#include "IRremote.h"
 
 #include <ArduinoSTL.h>
 
@@ -17,15 +18,24 @@ std::map<int, KeyboardKeycode> buttonMapping = {{17, KEY_0}, {3, KEYPAD_DOT}, {1
     {10, KEYPAD_8}, {6, KEYPAD_9}, {2, KEYPAD_ENTER}, {1, KEYPAD_ADD}, {0, KEYPAD_SUBTRACT},
     {9, KEYPAD_DIVIDE}, {5, KEYPAD_MULTIPLY}};
 
+std::map<int, ConsumerKeycode> irMapping = {
+    {0x45, MEDIA_VOL_MUTE}, {0x44, MEDIA_PREVIOUS}, {0x40, MEDIA_PLAY_PAUSE}, {0x43, MEDIA_NEXT}};
+
 std::map<int, ConsumerKeycode> consumerMapping = {{13, CONSUMER_CALCULATOR}};
 
 namespace pins
 {
 const int potentiometer = A0;
-const int joyX = A1;
-const int joyY = A2;
-const int joyBtn = 15;
+const int ledsClock = 7;
+const int ledsLatch = 8;
+const int ledsData = 9;
+const int encoderA = 1;
+const int encoderB = 0;
+const int encoderBtn = 10;
+const int ir = 16;
 } // namespace pins
+
+void encoderISR();
 
 void setup()
 {
@@ -46,12 +56,19 @@ void setup()
         btn = HIGH;
     }
     pinMode(pins::potentiometer, INPUT);
-    pinMode(pins::joyBtn, INPUT_PULLUP);
-    pinMode(pins::joyX, INPUT);
-    pinMode(pins::joyY, INPUT);
-    Mouse.begin();
+    pinMode(pins::ledsClock, OUTPUT);
+    pinMode(pins::ledsData, OUTPUT);
+    pinMode(pins::ledsLatch, OUTPUT);
+    pinMode(pins::encoderBtn, INPUT_PULLUP);
     Keyboard.begin();
     Consumer.begin();
+    BootKeyboard.begin();
+    pinMode(pins::encoderA, INPUT);
+    pinMode(pins::encoderB, INPUT);
+    digitalWrite(pins::encoderA, HIGH);
+    digitalWrite(pins::encoderB, HIGH);
+    attachInterrupt(digitalPinToInterrupt(pins::encoderA), encoderISR, CHANGE);
+    IrReceiver.begin(pins::ir, ENABLE_LED_FEEDBACK);
 }
 
 void onKeyDown(int idx)
@@ -113,6 +130,8 @@ void processButton(int idx, int value)
 
 void readMatrix()
 {
+    processButton(4, digitalRead(pins::encoderBtn));
+    return;
     int buttonIdx = 0;
     // iterate the columns
     for (auto col : cols) {
@@ -149,79 +168,121 @@ void printMatrix()
     out::cout << out::endl;
 }
 
-int lastVal = 1024;
-double volume = 1.0;
-int ups = 0;
-int downs = 0;
-double dMouseX = 0;
-double dMouseY = 0;
-unsigned long mouseX = 0;
-unsigned long mouseY = 0;
-bool mouseClicked = false;
-
-void checkMouse()
-{
-    if (digitalRead(pins::joyBtn) == LOW) {
-        if (!mouseClicked) {
-            Mouse.press();
-            mouseClicked = true;
-        }
-    } else {
-        if (mouseClicked) {
-            Mouse.release();
-            mouseClicked = false;
-        }
-    }
-
-    int joyX = analogRead(pins::joyX);
-    int joyY = analogRead(pins::joyY);
-    double dJoyX = pow((joyX - 498) / 512.0, 1);
-    double dJoyY = pow((joyY - 498) / 512.0, 1);
-    if (fabs(dJoyX) < 0.01 && fabs(dJoyY) < 0.01) {
-        return;
-    }
-    dMouseX += dJoyX * -10.0;
-    dMouseY += dJoyY * 10.0;
-    if (static_cast<decltype(mouseX)>(dMouseX) != mouseX) {
-        int offset = static_cast<decltype(mouseX)>(dMouseX) - mouseX;
-        Mouse.move(-offset, 0);
-        mouseX = static_cast<decltype(mouseX)>(dMouseX);
-    }
-    if (static_cast<decltype(mouseY)>(dMouseY) != mouseY) {
-        int offset = static_cast<decltype(mouseY)>(dMouseY) - mouseY;
-        Mouse.move(0, -offset);
-        mouseY = static_cast<decltype(mouseY)>(dMouseY);
-    }
-}
-
-void checkVolume()
+double getTargetVolume()
 {
     int val = abs(1024 - analogRead(pins::potentiometer));
     double targetVolume = val / 1024.0;
-    double deltaVolume = volume - targetVolume;
+    return targetVolume;
+}
+
+unsigned long ledTimeout = 0;
+int persistentLedValue = 0;
+void setLeds(int value, int timeout)
+{
+    digitalWrite(pins::ledsLatch, LOW);
+    shiftOut(pins::ledsData, pins::ledsClock, LSBFIRST, value);
+    digitalWrite(pins::ledsLatch, HIGH);
+    if (timeout) {
+        ledTimeout = millis() + timeout;
+    } else {
+        persistentLedValue = value;
+        ledTimeout = 0;
+    }
+}
+
+void checkLocks()
+{
+    int lockLeds = 0;
+    if (BootKeyboard.getLeds() & LED_CAPS_LOCK) {
+        lockLeds |= 2;
+    }
+    if (!(BootKeyboard.getLeds() & LED_NUM_LOCK)) {
+        lockLeds |= 4;
+    }
+    if (BootKeyboard.getLeds() & LED_SCROLL_LOCK) {
+        lockLeds |= 1;
+    }
+    if (ledTimeout == 0) {
+        setLeds(lockLeds, 0);
+    }
+}
+
+namespace volume
+{
+double volumeValue = 0.0;
+volatile double targetVolume = 0.0;
+double minVolume = 0.0;
+int ups = 0;
+int downs = 0;
+} // namespace volume
+
+void changeVolume(ConsumerKeycode val)
+{
+    using namespace volume;
+    Consumer.press(val);
+    delay(10);
+    Consumer.release(val);
+    delay(10);
+};
+
+void checkVolume()
+{
+    using namespace volume;
+    //double targetVolume = getTargetVolume();
+    double deltaVolume = volumeValue - targetVolume;
     int steps = fabs(deltaVolume) / 0.02;
-    while (fabs(volume - targetVolume) > 0.04) {
-        out::cout << F("From ") << volume << F(" To ") << targetVolume;
-        if (volume < targetVolume) {
-            Consumer.press(MEDIA_VOLUME_UP);
-            delay(10);
-            Consumer.release(MEDIA_VOLUME_UP);
+    while (fabs(volumeValue - targetVolume) > 0.01) {
+        out::cout << F("From ") << volumeValue << F(" To ") << targetVolume;
+        if (volumeValue < targetVolume) {
+            changeVolume(MEDIA_VOLUME_UP);
             downs = 0;
             ++ups;
             out::cout << F(" Up ") << ups << out::endl;
-            volume += 0.02;
+            volumeValue += 0.02;
             delay(10);
         } else {
-            Consumer.press(MEDIA_VOLUME_DOWN);
-            delay(10);
-            Consumer.release(MEDIA_VOLUME_DOWN);
+            changeVolume(MEDIA_VOLUME_DOWN);
             ups = 0;
             ++downs;
             out::cout << F(" Down ") << downs << out::endl;
-            volume -= 0.02;
+            volumeValue -= 0.02;
             delay(10);
         }
+        if (volumeValue > minVolume + 1.0) {
+            minVolume = volumeValue - 1.0;
+        }
+        if (volumeValue < minVolume) {
+            minVolume = volumeValue;
+        }
+        int ledsValue = 0;
+        int numLeds = sqrt((volumeValue - minVolume)) * 8.0f;
+        for (int i = 0; i < numLeds; ++i) {
+            ledsValue |= 1 << (7 - i);
+        }
+        setLeds(ledsValue, 3000);
     }
+}
+
+volatile int lastEncoderA = 0;
+void encoderISR()
+{
+    noInterrupts();
+    using namespace volume;
+    int A = digitalRead(pins::encoderA); //MSB = most significant bit
+    int B = digitalRead(pins::encoderB); //LSB = least significant bit
+    if (A != 0 && A != lastEncoderA) {
+        if (A == B) {
+            //changeVolume(MEDIA_VOLUME_UP);
+            targetVolume += 0.02;
+            out::cout << "CW" << out::endl;
+        } else {
+            //changeVolume(MEDIA_VOLUME_DOWN);
+            targetVolume -= 0.02;
+            out::cout << "CCW" << out::endl;
+        }
+    }
+    lastEncoderA = A;
+    interrupts();
 }
 
 void blinkLed()
@@ -238,6 +299,34 @@ void blinkLed()
     }
     lit = !lit;
 #endif
+    if (ledTimeout && ledTimeout < millis()) {
+        setLeds(persistentLedValue, 0);
+    }
+}
+
+decode_results results;
+
+void checkIR()
+{
+    if (!IrReceiver.decode()) {
+        return;
+    }
+    const auto& data = IrReceiver.decodedIRData;
+    bool repeat = data.flags & IRDATA_FLAGS_IS_REPEAT;
+    switch (data.command) {
+        case 0x46:
+            volume::targetVolume += 0.02;
+            break;
+        case 0x15:
+            volume::targetVolume -= 0.02;
+            break;
+    }
+    if (!repeat && irMapping.count(data.command) > 0) {
+        Consumer.write(irMapping[data.command]);
+    }
+    out::cout << out::hex << data.command << " " << out::dec
+              << (data.flags & IRDATA_FLAGS_IS_REPEAT) << out::endl;
+    IrReceiver.resume();
 }
 
 struct ScheduledFunction
@@ -249,7 +338,7 @@ struct ScheduledFunction
 };
 
 ScheduledFunction scheduledFuncs[] = {{&readMatrix, 1, 0}, {&checkVolume, 100, 0},
-    {&blinkLed, 1000, 0}, {&printMatrix, 100, 0}, {&checkMouse, 10, 0}};
+    {&blinkLed, 1000, 0}, {&printMatrix, 100, 0}, {&checkLocks, 100, 0}, {&checkIR, 100, 0}};
 
 void loop()
 {

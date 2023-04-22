@@ -6,5 +6,8 @@ namespace out
 {
 Endl endl;
 Cout cout;
-bool Enabled = false;
+Hex hex;
+Dec dec;
+bool Enabled = true;
+Mode mode = Mode::Dec;
 } // namespace out
