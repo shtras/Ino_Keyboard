@@ -1,5 +1,5 @@
 #pragma once
-#include "HID-Project.h"
+#include <Arduino.h>
 
 //#define USE_SERIAL
 
