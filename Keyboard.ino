@@ -1,17 +1,19 @@
-#include "HID-Project.h"
-#include "IRremote.h"
-
+#include <HID-Project.h>
+#include <IRremote.h>
 #include <ArduinoSTL.h>
 
+#include "LiquidCrystal.h"
 #include "Out.h"
+#include "Matrix.h"
+
 #include <array>
 #include <map>
 
-constexpr int numCols = 5;
-constexpr int numRows = 4;
-std::array<int, numCols> cols = {2, 3, 4, 5, 10};
-std::array<int, numRows> rows = {6, 7, 8, 9};
-std::array<byte, numCols * numRows> buttonState;
+constexpr int numRows = 5;
+constexpr int numCols = 4;
+std::array<int, numRows> rows = {10, 6, 5, 15, 14};
+std::array<int, numCols> cols = {21, 20, 19, 18};
+std::array<byte, numRows * numCols> buttonState;
 
 std::map<int, KeyboardKeycode> buttonMapping = {{17, KEY_0}, {3, KEYPAD_DOT}, {16, KEYPAD_1},
     {18, KEYPAD_2}, {19, KEYPAD_3}, {15, KEYPAD_4}, {11, KEYPAD_5}, {7, KEYPAD_6}, {14, KEYPAD_7},
@@ -25,15 +27,19 @@ std::map<int, ConsumerKeycode> consumerMapping = {{13, CONSUMER_CALCULATOR}};
 
 namespace pins
 {
-const int potentiometer = A0;
 const int ledsClock = 7;
 const int ledsLatch = 8;
 const int ledsData = 9;
 const int encoderA = 1;
 const int encoderB = 0;
-const int encoderBtn = 10;
 const int ir = 16;
+
+const int displayData = 2;
+const int displayLatch = 3;
+const int displayClock = 4;
 } // namespace pins
+
+LiquidCrystal lcd(pins::displayLatch, pins::displayClock, pins::displayData);
 
 void encoderISR();
 
@@ -43,23 +49,21 @@ void setup()
         out::cout.Init();
     }
 
-    for (auto row : rows) {
+    for (auto row : cols) {
         out::cout << row << F(" as input");
         pinMode(row, INPUT);
     }
 
-    for (auto col : cols) {
+    for (auto col : rows) {
         out::cout << col << F(" as input-pullup");
         pinMode(col, INPUT_PULLUP);
     }
     for (auto& btn : buttonState) {
         btn = HIGH;
     }
-    pinMode(pins::potentiometer, INPUT);
     pinMode(pins::ledsClock, OUTPUT);
     pinMode(pins::ledsData, OUTPUT);
     pinMode(pins::ledsLatch, OUTPUT);
-    pinMode(pins::encoderBtn, INPUT_PULLUP);
     Keyboard.begin();
     Consumer.begin();
     BootKeyboard.begin();
@@ -69,46 +73,49 @@ void setup()
     digitalWrite(pins::encoderB, HIGH);
     attachInterrupt(digitalPinToInterrupt(pins::encoderA), encoderISR, CHANGE);
     IrReceiver.begin(pins::ir, ENABLE_LED_FEEDBACK);
+    lcd.begin(16, 2);
+    lcd.print(F("Hello, World!"));
 }
 
 void onKeyDown(int idx)
 {
     out::cout << F("Pressed ") << idx << out::endl;
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print(F("Key down: "));
+    lcd.print(idx);
     if (buttonMapping.count(idx) > 0) {
         auto key = buttonMapping[idx];
         out::cout << F("Sending ") << key << F(" ") << KeyboardKeycode((uint8_t)(key & 0xFF))
                   << out::endl;
-        Keyboard.press(key);
+        //Keyboard.press(key);
     } else if (consumerMapping.count(idx) > 0) {
-        Consumer.write(consumerMapping[idx]);
+        //Consumer.write(consumerMapping[idx]);
     }
 }
 
 void uname()
 {
-    Keyboard.print("");
+    Keyboard.print(F(""));
 }
 
 void pwd()
 {
-    Keyboard.print("");
+    Keyboard.print(F(""));
 }
 
 void onKeyUp(int idx)
 {
     out::cout << F("Released ") << idx << out::endl;
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print(F("Key up: "));
+    lcd.print(idx);
+
     if (buttonMapping.count(idx) > 0) {
-        Keyboard.release(buttonMapping[idx]);
+        //Keyboard.release(buttonMapping[idx]);
     }
-    if (idx == 4) {
-        //out::Enabled = !out::Enabled;
-        //if (out::Enabled) {
-        //    out::cout.Init();
-        //}
-        Consumer.press(MEDIA_VOLUME_MUTE);
-        delay(10);
-        Consumer.release(MEDIA_VOLUME_MUTE);
-    } else if (idx == 8) {
+    if (idx == 8) {
         pwd();
     } else if (idx == 12) {
         uname();
@@ -130,17 +137,15 @@ void processButton(int idx, int value)
 
 void readMatrix()
 {
-    processButton(4, digitalRead(pins::encoderBtn));
-    return;
     int buttonIdx = 0;
-    // iterate the columns
-    for (auto col : cols) {
+    // iterate the rows
+    for (auto col : rows) {
         // col: set to output to low
         pinMode(col, OUTPUT);
         digitalWrite(col, LOW);
 
-        // row: interate through the rows
-        for (auto row : rows) {
+        // row: interate through the cols
+        for (auto row : cols) {
             pinMode(row, INPUT_PULLUP);
             processButton(buttonIdx++, digitalRead(row));
             pinMode(row, INPUT);
@@ -168,13 +173,6 @@ void printMatrix()
     out::cout << out::endl;
 }
 
-double getTargetVolume()
-{
-    int val = abs(1024 - analogRead(pins::potentiometer));
-    double targetVolume = val / 1024.0;
-    return targetVolume;
-}
-
 std::array<int, 8> ledAnimation = {0};
 int ledAnimationCounter = 0;
 int ledAnimationLength = 0;
@@ -182,7 +180,7 @@ int ledAnimationTimeout = 0;
 
 void setLedAnimation(std::array<int, 8> animation, int length, int timeout)
 {
-    for (int i=0; i<length; ++i) {
+    for (int i = 0; i < length; ++i) {
         ledAnimation[i] = animation[i];
     }
     ledAnimationLength = length;
@@ -194,6 +192,10 @@ unsigned long ledTimeout = 0;
 int persistentLedValue = 0;
 void setLeds(int value, int timeout)
 {
+    pinMode(pins::ledsClock, OUTPUT);
+    pinMode(pins::ledsData, OUTPUT);
+    pinMode(pins::ledsLatch, OUTPUT);
+
     digitalWrite(pins::ledsLatch, LOW);
     shiftOut(pins::ledsData, pins::ledsClock, LSBFIRST, value);
     digitalWrite(pins::ledsLatch, HIGH);
@@ -258,7 +260,6 @@ void changeVolume(ConsumerKeycode val)
 void checkVolume()
 {
     using namespace volume;
-    //double targetVolume = getTargetVolume();
     double deltaVolume = volumeValue - targetVolume;
     int steps = fabs(deltaVolume) / 0.02;
     while (fabs(volumeValue - targetVolume) > 0.01) {
@@ -290,6 +291,10 @@ void checkVolume()
             ledsValue |= 1 << (7 - i);
         }
         setLeds(ledsValue, 3000);
+        lcd.setCursor(0, 1);
+        lcd.print("Vol:            ");
+        lcd.setCursor(5, 1);
+        lcd.print(static_cast<int>((volumeValue - minVolume) * 100.0));
     }
 }
 
@@ -298,17 +303,15 @@ void encoderISR()
 {
     noInterrupts();
     using namespace volume;
-    int A = digitalRead(pins::encoderA); //MSB = most significant bit
-    int B = digitalRead(pins::encoderB); //LSB = least significant bit
+    int A = digitalRead(pins::encoderA);
+    int B = digitalRead(pins::encoderB);
     if (A != 0 && A != lastEncoderA) {
         if (A == B) {
-            //changeVolume(MEDIA_VOLUME_UP);
             targetVolume += 0.02;
-            out::cout << "CW" << out::endl;
+            out::cout << F("CW") << out::endl;
         } else {
-            //changeVolume(MEDIA_VOLUME_DOWN);
             targetVolume -= 0.02;
-            out::cout << "CCW" << out::endl;
+            out::cout << F("CCW") << out::endl;
         }
     }
     lastEncoderA = A;
@@ -346,8 +349,8 @@ void checkIR()
     const auto& data = IrReceiver.decodedIRData;
     IrGuard guard(data.command);
     bool repeat = data.flags & IRDATA_FLAGS_IS_REPEAT;
-    out::cout << out::hex << data.command << " " << lastCommand << " " << out::dec << commandRepeat
-              << " " << repeat << out::endl;
+    out::cout << out::hex << data.command << F(" ") << lastCommand << F(" ") << out::dec << commandRepeat
+              << F(" ") << repeat << out::endl;
 
     if (data.command != lastCommand) {
         commandRepeat = 0;
@@ -356,9 +359,15 @@ void checkIR()
     if (!repeat) {
         commandRepeat = 0;
     }
+    lcd.setCursor(0, 0);
+    lcd.print("C:    R:        ");
+    lcd.setCursor(3, 0);
+    lcd.print(data.command, HEX);
+    lcd.setCursor(9, 0);
+    lcd.print(repeat);
     ++commandRepeat;
     if (commandRepeat >= continuousThreshold) {
-        out ::cout << "Continuous" << out::endl;
+        out ::cout << F("Continuous") << out::endl;
         switch (data.command) {
             case 0x46:
                 volume::targetVolume += 0.02;
@@ -369,9 +378,9 @@ void checkIR()
         }
     }
     if (commandRepeat == singleThreshold) {
-        out::cout << "Single" << out::endl;
+        out::cout << F("Single") << out::endl;
         if (irMapping.count(data.command) > 0) {
-            setLedAnimation({129,66,36,24,36,66,129, 0}, 7, 200);
+            setLedAnimation({129, 66, 36, 24, 36, 66, 129, 0}, 7, 200);
             Consumer.write(irMapping[data.command]);
         }
     }
@@ -386,7 +395,7 @@ struct ScheduledFunction
 };
 
 ScheduledFunction scheduledFuncs[] = {{&readMatrix, 1, 0}, {&checkVolume, 100, 0},
-    {&blinkLed, 150, 0}, {&printMatrix, 100, 0}, {&checkLocks, 100, 0}, {&checkIR, 100, 0}};
+    {&blinkLed, 150, 0}, {&printMatrix, 400, 0}, {&checkLocks, 100, 0}, {&checkIR, 100, 0}};
 
 void loop()
 {
