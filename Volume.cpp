@@ -73,10 +73,16 @@ void checkVolume()
             ledsValue |= 1 << (7 - i);
         }
         setLeds(ledsValue, 3000);
+
+        int plainVolume = static_cast<int>((volumeValue - minVolume) * 100.0);
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        for (int i=0; i<plainVolume / 6.25;++i) {
+            lcd.print((char)255);
+        }
         lcd.setCursor(0, 1);
-        lcd.print("Vol:            ");
-        lcd.setCursor(5, 1);
-        lcd.print(static_cast<int>((volumeValue - minVolume) * 100.0));
+        lcd.print("Vol: ");
+        lcd.print(plainVolume);
     }
 }
 
