@@ -4,6 +4,7 @@
 #include "Leds.h"
 #include "Volume.h"
 #include "IR.h"
+#include "Settings.h"
 
 #include <HID-Project.h>
 #include <ArduinoSTL.h>
@@ -19,6 +20,7 @@ const int displayClock = 4;
 } // namespace pins
 
 LiquidCrystal lcd(pins::displayLatch, pins::displayClock, pins::displayData);
+Settings settings;
 
 void setup()
 {
@@ -32,7 +34,7 @@ void setup()
 
     lcd.begin(16, 2);
     lcd.print(F("Hello, World!"));
-    lcd.setPersistentStrings(F("Hello, World!"), F("Press any key"));
+    lcd.setPersistentStrings(F("Hello, World! this is a test very long string"), F("Press any key"));
 }
 
 struct ScheduledFunction

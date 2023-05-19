@@ -1,4 +1,6 @@
 #include "LCD.h"
+#include "Leds.h"
+#include "Out.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -33,7 +35,7 @@ LiquidCrystal::LiquidCrystal(uint8_t latchPin, uint8_t clockPin, uint8_t dataPin
 
 void LiquidCrystal::init()
 {
-    _displayfunction = LCD_4BITMODE | LCD_1LINE | LCD_5x8DOTS;
+    displayFunction_ = LCD_4BITMODE | LCD_1LINE | LCD_5x8DOTS;
 
     begin(16, 2);
 }
@@ -41,15 +43,15 @@ void LiquidCrystal::init()
 void LiquidCrystal::begin(uint8_t cols, uint8_t lines, uint8_t dotsize)
 {
     if (lines > 1) {
-        _displayfunction |= LCD_2LINE;
+        displayFunction_ |= LCD_2LINE;
     }
-    _numlines = lines;
+    numLines_ = lines;
 
     setRowOffsets(0x00, 0x40, 0x00 + cols, 0x40 + cols);
 
     // for some 1 line displays you can select a 10 pixel high font
     if ((dotsize != LCD_5x8DOTS) && (lines == 1)) {
-        _displayfunction |= LCD_5x10DOTS;
+        displayFunction_ |= LCD_5x10DOTS;
     }
 
     // SEE PAGE 45/46 FOR INITIALIZATION SPECIFICATION!
@@ -57,8 +59,8 @@ void LiquidCrystal::begin(uint8_t cols, uint8_t lines, uint8_t dotsize)
     // before sending commands. Arduino can turn on way before 4.5V so we'll wait 50
     delayMicroseconds(50000);
     // Now we pull both RS and R/W low to begin commands
-    _rs_pin = LOW;
-    _enable_pin = LOW;
+    rsPin_ = LOW;
+    enablePin_ = LOW;
 
     // this is according to the hitachi HD44780 datasheet
     // figure 24, pg 46
@@ -79,27 +81,27 @@ void LiquidCrystal::begin(uint8_t cols, uint8_t lines, uint8_t dotsize)
     write4bits(0x02);
 
     // finally, set # lines, font size, etc.
-    command(LCD_FUNCTIONSET | _displayfunction);
+    command(LCD_FUNCTIONSET | displayFunction_);
 
     // turn the display on with no cursor or blinking default
-    _displaycontrol = LCD_DISPLAYON | LCD_CURSOROFF | LCD_BLINKOFF;
+    displayControl_ = LCD_DISPLAYON | LCD_CURSOROFF | LCD_BLINKOFF;
     display();
 
     // clear it off
     clear();
 
     // Initialize to default text direction (for romance languages)
-    _displaymode = LCD_ENTRYLEFT | LCD_ENTRYSHIFTDECREMENT;
+    displayMode_ = LCD_ENTRYLEFT | LCD_ENTRYSHIFTDECREMENT;
     // set the entry mode
-    command(LCD_ENTRYMODESET | _displaymode);
+    command(LCD_ENTRYMODESET | displayMode_);
 }
 
 void LiquidCrystal::setRowOffsets(int row0, int row1, int row2, int row3)
 {
-    _row_offsets[0] = row0;
-    _row_offsets[1] = row1;
-    _row_offsets[2] = row2;
-    _row_offsets[3] = row3;
+    rowOffsets_[0] = row0;
+    rowOffsets_[1] = row1;
+    rowOffsets_[2] = row2;
+    rowOffsets_[3] = row3;
 }
 
 /********** high level commands, for the user! */
@@ -117,51 +119,51 @@ void LiquidCrystal::home()
 
 void LiquidCrystal::setCursor(uint8_t col, uint8_t row)
 {
-    const size_t max_lines = sizeof(_row_offsets) / sizeof(*_row_offsets);
+    const size_t max_lines = sizeof(rowOffsets_) / sizeof(*rowOffsets_);
     if (row >= max_lines) {
         row = max_lines - 1; // we count rows starting w/0
     }
-    if (row >= _numlines) {
-        row = _numlines - 1; // we count rows starting w/0
+    if (row >= numLines_) {
+        row = numLines_ - 1; // we count rows starting w/0
     }
 
-    command(LCD_SETDDRAMADDR | (col + _row_offsets[row]));
+    command(LCD_SETDDRAMADDR | (col + rowOffsets_[row]));
 }
 
 // Turn the display on/off (quickly)
 void LiquidCrystal::noDisplay()
 {
-    _displaycontrol &= ~LCD_DISPLAYON;
-    command(LCD_DISPLAYCONTROL | _displaycontrol);
+    displayControl_ &= ~LCD_DISPLAYON;
+    command(LCD_DISPLAYCONTROL | displayControl_);
 }
 void LiquidCrystal::display()
 {
-    _displaycontrol |= LCD_DISPLAYON;
-    command(LCD_DISPLAYCONTROL | _displaycontrol);
+    displayControl_ |= LCD_DISPLAYON;
+    command(LCD_DISPLAYCONTROL | displayControl_);
 }
 
 // Turns the underline cursor on/off
 void LiquidCrystal::noCursor()
 {
-    _displaycontrol &= ~LCD_CURSORON;
-    command(LCD_DISPLAYCONTROL | _displaycontrol);
+    displayControl_ &= ~LCD_CURSORON;
+    command(LCD_DISPLAYCONTROL | displayControl_);
 }
 void LiquidCrystal::cursor()
 {
-    _displaycontrol |= LCD_CURSORON;
-    command(LCD_DISPLAYCONTROL | _displaycontrol);
+    displayControl_ |= LCD_CURSORON;
+    command(LCD_DISPLAYCONTROL | displayControl_);
 }
 
 // Turn on and off the blinking cursor
 void LiquidCrystal::noBlink()
 {
-    _displaycontrol &= ~LCD_BLINKON;
-    command(LCD_DISPLAYCONTROL | _displaycontrol);
+    displayControl_ &= ~LCD_BLINKON;
+    command(LCD_DISPLAYCONTROL | displayControl_);
 }
 void LiquidCrystal::blink()
 {
-    _displaycontrol |= LCD_BLINKON;
-    command(LCD_DISPLAYCONTROL | _displaycontrol);
+    displayControl_ |= LCD_BLINKON;
+    command(LCD_DISPLAYCONTROL | displayControl_);
 }
 
 // These commands scroll the display without changing the RAM
@@ -177,29 +179,29 @@ void LiquidCrystal::scrollDisplayRight(void)
 // This is for text that flows Left to Right
 void LiquidCrystal::leftToRight(void)
 {
-    _displaymode |= LCD_ENTRYLEFT;
-    command(LCD_ENTRYMODESET | _displaymode);
+    displayMode_ |= LCD_ENTRYLEFT;
+    command(LCD_ENTRYMODESET | displayMode_);
 }
 
 // This is for text that flows Right to Left
 void LiquidCrystal::rightToLeft(void)
 {
-    _displaymode &= ~LCD_ENTRYLEFT;
-    command(LCD_ENTRYMODESET | _displaymode);
+    displayMode_ &= ~LCD_ENTRYLEFT;
+    command(LCD_ENTRYMODESET | displayMode_);
 }
 
 // This will 'right justify' text from the cursor
 void LiquidCrystal::autoscroll(void)
 {
-    _displaymode |= LCD_ENTRYSHIFTINCREMENT;
-    command(LCD_ENTRYMODESET | _displaymode);
+    displayMode_ |= LCD_ENTRYSHIFTINCREMENT;
+    command(LCD_ENTRYMODESET | displayMode_);
 }
 
 // This will 'left justify' text from the cursor
 void LiquidCrystal::noAutoscroll(void)
 {
-    _displaymode &= ~LCD_ENTRYSHIFTINCREMENT;
-    command(LCD_ENTRYMODESET | _displaymode);
+    displayMode_ &= ~LCD_ENTRYSHIFTINCREMENT;
+    command(LCD_ENTRYMODESET | displayMode_);
 }
 
 // Allows us to fill the first 8 CGRAM locations
@@ -230,8 +232,8 @@ inline size_t LiquidCrystal::write(uint8_t value)
 
 void LiquidCrystal::flushPins()
 {
-    int value = (_rs_pin << 7) | (_enable_pin << 5) | (_data_pins[0] << 4) |
-                (_data_pins[1] << 3) | (_data_pins[2] << 2) | (_data_pins[3] << 1);
+    int value = (rsPin_ << 7) | (enablePin_ << 5) | (dataPins_[0] << 4) | (dataPins_[1] << 3) |
+                (dataPins_[2] << 2) | (dataPins_[3] << 1);
     pinMode(latchPin_, OUTPUT);
     pinMode(dataPin_, OUTPUT);
     pinMode(clockPin_, OUTPUT);
@@ -243,7 +245,7 @@ void LiquidCrystal::flushPins()
 // write either command or data, with automatic 4/8-bit selection
 void LiquidCrystal::send(uint8_t value, uint8_t mode)
 {
-    _rs_pin = mode;
+    rsPin_ = mode;
     flushPins();
 
     write4bits(value >> 4);
@@ -252,15 +254,15 @@ void LiquidCrystal::send(uint8_t value, uint8_t mode)
 
 void LiquidCrystal::pulseEnable(void)
 {
-    _enable_pin = LOW;
+    enablePin_ = LOW;
     flushPins();
     delayMicroseconds(1);
 
-    _enable_pin = HIGH;
+    enablePin_ = HIGH;
     flushPins();
     delayMicroseconds(1); // enable pulse must be >450ns
 
-    _enable_pin = LOW;
+    enablePin_ = LOW;
     flushPins();
     delayMicroseconds(100); // commands need > 37us to settle
 }
@@ -268,41 +270,93 @@ void LiquidCrystal::pulseEnable(void)
 void LiquidCrystal::write4bits(uint8_t value)
 {
     for (int i = 0; i < 4; i++) {
-        _data_pins[i] = (value >> i) & 0x01;
+        dataPins_[i] = (value >> i) & 0x01;
     }
 
     pulseEnable();
 }
 
-void LiquidCrystal::displayLoop()
+namespace
 {
-    if (_displayTimeout == 0) {
-        return;
-    }
-    if (_displayTimeout > millis()) {
-        return;
-    }
-    _displayTimeout = 0;
-    clear();
-    setCursor(0, 0);
-    Print::print(_persistentBufferUp);
-    setCursor(0, 1);
-    Print::print(_persistentBufferDn);
+const int bounceInterval = 450;
 }
 
-void LiquidCrystal::setPersistentStrings(const __FlashStringHelper* upper, const __FlashStringHelper* lower)
+void LiquidCrystal::displayLoop()
 {
-    strncpy_P(_persistentBufferUp, reinterpret_cast<const char*>(upper), 16);
-    strncpy_P(_persistentBufferDn, reinterpret_cast<const char*>(lower), 16);
-    _displayTimeout = millis();
+    if (displayTimeout_ == 0) {
+        upper_.bounce();
+        lower_.bounce();
+    }
+    if (displayTimeout_ > 0 && displayTimeout_ <= millis()) {
+        displayTimeout_ = 0;
+        upper_.reset();
+        lower_.reset();
+    }
+    out::cout << "Display timeout = " << displayTimeout_ << out::endl;
+}
+
+void LiquidCrystal::setPersistentStrings(
+    const __FlashStringHelper* upper, const __FlashStringHelper* lower)
+{
+    clear();
+    displayTimeout_ = millis();
+    upper_.set(upper);
+    lower_.set(lower);
 }
 
 void LiquidCrystal::setTimeout(unsigned long value)
 {
-    _displayTimeout = value;
+    displayTimeout_ = value;
 }
 
 void displayLoop()
 {
     lcd.displayLoop();
+}
+
+LiquidCrystal::BouncyStr::BouncyStr(int row)
+    : row_(row), bounceTime_(millis() + bounceInterval)
+{
+}
+
+void LiquidCrystal::BouncyStr::bounce()
+{
+    if (len_ <= 16) {
+        return;
+    }
+    if (bounceTime_ > millis()) {
+        return;
+    }
+    bounceTime_ = millis() + bounceInterval;
+
+    if (dir_ < 0 && idx_ <= 0) {
+        dir_ = 1;
+    }
+    if (dir_ > 0 && idx_ >= len_ - 16) {
+        dir_ = -1;
+    }
+    idx_ += dir_;
+    display();
+}
+
+void LiquidCrystal::BouncyStr::set(const __FlashStringHelper* val)
+{
+    len_ = strlen_P(reinterpret_cast<const char*>(val));
+    strncpy_P(str_, reinterpret_cast<const char*>(val), sizeof(str_) - 1);
+    display();
+}
+
+void LiquidCrystal::BouncyStr::reset()
+{
+    idx_ = 0;
+    display();
+}
+
+void LiquidCrystal::BouncyStr::display()
+{
+    lcd.setCursor(0, row_);
+    auto c = str_[idx_ + 16];
+    str_[idx_ + 16] = '\0';
+    lcd.print(str_ + idx_, 0);
+    str_[idx_ + 16] = c;
 }

@@ -3,6 +3,7 @@
 #include "Volume.h"
 #include "LCD.h"
 #include "Leds.h"
+#include "Settings.h"
 
 #include <IRremote.h>
 #include <ArduinoSTL.h>
@@ -48,6 +49,9 @@ void setupIR()
 
 void checkIR()
 {
+    if (!settings.irEnabled) {
+        return;
+    }
     constexpr int continuousThreshold = 1;
     constexpr int singleThreshold = 2;
     if (!IrReceiver.decode()) {
@@ -66,12 +70,14 @@ void checkIR()
     if (!repeat) {
         commandRepeat = 0;
     }
-    lcd.setCursor(0, 0);
-    lcd.print("C:    R:        ");
-    lcd.setCursor(3, 0);
-    lcd.print(data.command, HEX);
-    lcd.setCursor(9, 0);
-    lcd.print(repeat);
+    if (settings.irDebug) {
+        lcd.setCursor(0, 0);
+        lcd.print("C:    R:        ");
+        lcd.setCursor(3, 0);
+        lcd.print(data.command, HEX);
+        lcd.setCursor(9, 0);
+        lcd.print(repeat);
+    }
     ++commandRepeat;
     if (commandRepeat >= continuousThreshold) {
         out ::cout << F("Continuous") << out::endl;

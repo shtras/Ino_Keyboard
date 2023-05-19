@@ -4,6 +4,7 @@
 
 #include <inttypes.h>
 #include "Print.h"
+#include "Settings.h"
 
 class LiquidCrystal;
 extern "C" LiquidCrystal lcd;
@@ -84,10 +85,24 @@ public:
     template <typename T>
     void print(const T val, int timeout = 1000)
     {
+        if (!settings.lcdEnabled) {
+            return;
+        }
         Print::print(val);
         if (timeout > 0) {
-            _displayTimeout = millis() + timeout;
+            displayTimeout_ = millis() + timeout;
         }
+    }
+
+    template <typename T>
+    void cprint(const T val)
+    {
+        if (!settings.lcdEnabled) {
+            return;
+        }
+        clear();
+        setCursor(0, 0);
+        print(val);
     }
     void setPersistentStrings(const __FlashStringHelper* upper, const __FlashStringHelper* lower);
     void setTimeout(unsigned long value);
@@ -96,32 +111,49 @@ public:
     using Print::write;
 
 private:
+    class BouncyStr
+    {
+    public:
+        BouncyStr(int row);
+        void bounce();
+        void set(const __FlashStringHelper* val);
+        void reset();
+
+    private:
+        void display();
+
+        int row_ = 0;
+        char str_[128];
+        int idx_ = 0;
+        int dir_ = 1;
+        int len_ = 0;
+        unsigned long bounceTime_ = 0;
+    };
+
     void flushPins();
 
     void send(uint8_t, uint8_t);
     void write4bits(uint8_t);
     void pulseEnable();
 
-    uint8_t _rs_pin;     // LOW: command.  HIGH: character.
-    uint8_t _enable_pin; // activated by a HIGH pulse.
-    uint8_t _data_pins[4];
+    uint8_t rsPin_;     // LOW: command.  HIGH: character.
+    uint8_t enablePin_; // activated by a HIGH pulse.
+    uint8_t dataPins_[4];
 
-    uint8_t _displayfunction;
-    uint8_t _displaycontrol;
-    uint8_t _displaymode;
+    uint8_t displayFunction_;
+    uint8_t displayControl_;
+    uint8_t displayMode_;
 
-    uint8_t _initialized;
-
-    uint8_t _numlines;
-    uint8_t _row_offsets[4];
+    uint8_t numLines_;
+    uint8_t rowOffsets_[4];
 
     uint8_t latchPin_;
     uint8_t clockPin_;
     uint8_t dataPin_;
 
-    char _persistentBufferUp[16] = {0};
-    char _persistentBufferDn[16] = {0};
-    unsigned long _displayTimeout = 0;
+    unsigned long displayTimeout_ = 0;
+    BouncyStr upper_{0};
+    BouncyStr lower_{1};
 };
 
 #endif

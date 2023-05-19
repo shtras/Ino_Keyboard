@@ -1,4 +1,6 @@
 #include "Leds.h"
+#include "Settings.h"
+
 #include <Arduino.h>
 #include <array>
 
@@ -31,6 +33,9 @@ void setupLeds()
 
 void setLedAnimation(std::array<int, 8> animation, int length, int timeout)
 {
+    if (!settings.ledsEnabled) {
+        return;
+    }
     length = std::min(length, static_cast<int>(ledAnimation.size()));
     for (int i = 0; i < length; ++i) {
         ledAnimation[i] = animation[i];
@@ -43,6 +48,9 @@ void setLedAnimation(std::array<int, 8> animation, int length, int timeout)
 
 void setLeds(int value, int timeout)
 {
+    if (!settings.ledsEnabled) {
+        value = 0;
+    }
     pinMode(pins::ledsClock, OUTPUT);
     pinMode(pins::ledsData, OUTPUT);
     pinMode(pins::ledsLatch, OUTPUT);
