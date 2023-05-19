@@ -46,6 +46,10 @@ extern "C" LiquidCrystal lcd;
 #define LCD_5x10DOTS 0x04
 #define LCD_5x8DOTS 0x00
 
+extern "C" {
+void displayLoop();
+}
+
 class LiquidCrystal : public Print
 {
 public:
@@ -77,6 +81,18 @@ public:
     virtual size_t write(uint8_t);
     void command(uint8_t);
 
+    template <typename T>
+    void print(const T val, int timeout = 1000)
+    {
+        Print::print(val);
+        if (timeout > 0) {
+            _displayTimeout = millis() + timeout;
+        }
+    }
+    void setPersistentStrings(const __FlashStringHelper* upper, const __FlashStringHelper* lower);
+    void setTimeout(unsigned long value);
+    void displayLoop();
+
     using Print::write;
 
 private:
@@ -102,6 +118,10 @@ private:
     uint8_t latchPin_;
     uint8_t clockPin_;
     uint8_t dataPin_;
+
+    char _persistentBufferUp[16] = {0};
+    char _persistentBufferDn[16] = {0};
+    unsigned long _displayTimeout = 0;
 };
 
 #endif

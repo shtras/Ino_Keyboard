@@ -273,3 +273,36 @@ void LiquidCrystal::write4bits(uint8_t value)
 
     pulseEnable();
 }
+
+void LiquidCrystal::displayLoop()
+{
+    if (_displayTimeout == 0) {
+        return;
+    }
+    if (_displayTimeout > millis()) {
+        return;
+    }
+    _displayTimeout = 0;
+    clear();
+    setCursor(0, 0);
+    Print::print(_persistentBufferUp);
+    setCursor(0, 1);
+    Print::print(_persistentBufferDn);
+}
+
+void LiquidCrystal::setPersistentStrings(const __FlashStringHelper* upper, const __FlashStringHelper* lower)
+{
+    strncpy_P(_persistentBufferUp, reinterpret_cast<const char*>(upper), 16);
+    strncpy_P(_persistentBufferDn, reinterpret_cast<const char*>(lower), 16);
+    _displayTimeout = millis();
+}
+
+void LiquidCrystal::setTimeout(unsigned long value)
+{
+    _displayTimeout = value;
+}
+
+void displayLoop()
+{
+    lcd.displayLoop();
+}

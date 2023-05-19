@@ -32,6 +32,7 @@ void setup()
 
     lcd.begin(16, 2);
     lcd.print(F("Hello, World!"));
+    lcd.setPersistentStrings(F("Hello, World!"), F("Press any key"));
 }
 
 struct ScheduledFunction
@@ -43,7 +44,8 @@ struct ScheduledFunction
 };
 
 ScheduledFunction scheduledFuncs[] = {{&readMatrix, 1, 0}, {&checkVolume, 100, 0},
-    {&blinkLed, 150, 0}, {&printMatrix, 400, 0}, {&checkLocks, 100, 0}, {&checkIR, 100, 0}};
+    {&blinkLed, 150, 0}, {&displayLoop, 500, 0}, {&printMatrix, 400, 0}, {&checkLocks, 100, 0},
+    {&checkIR, 100, 0}};
 
 void loop()
 {

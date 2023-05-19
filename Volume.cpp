@@ -70,7 +70,7 @@ void checkVolume()
         int ledsValue = 0;
         int numLeds = sqrt((volumeValue - minVolume)) * 8.0f;
         for (int i = 0; i < numLeds; ++i) {
-            ledsValue |= 1 << (7 - i);
+            ledsValue |= 1 << i;
         }
         setLeds(ledsValue, 3000);
 

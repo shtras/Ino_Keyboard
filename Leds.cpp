@@ -31,6 +31,7 @@ void setupLeds()
 
 void setLedAnimation(std::array<int, 8> animation, int length, int timeout)
 {
+    length = std::min(length, static_cast<int>(ledAnimation.size()));
     for (int i = 0; i < length; ++i) {
         ledAnimation[i] = animation[i];
     }

@@ -18,11 +18,11 @@ std::array<int, numRows> rows = {10, 6, 5, 15, 14};
 std::array<int, numCols> cols = {21, 20, 19, 18};
 std::array<byte, numRows * numCols> buttonState;
 
-std::map<int, ConsumerKeycode> consumerMapping = {{13, CONSUMER_CALCULATOR}};
-std::map<int, KeyboardKeycode> buttonMapping = {{17, KEY_0}, {3, KEYPAD_DOT}, {16, KEYPAD_1},
-    {18, KEYPAD_2}, {19, KEYPAD_3}, {15, KEYPAD_4}, {11, KEYPAD_5}, {7, KEYPAD_6}, {14, KEYPAD_7},
-    {10, KEYPAD_8}, {6, KEYPAD_9}, {2, KEYPAD_ENTER}, {1, KEYPAD_ADD}, {0, KEYPAD_SUBTRACT},
-    {9, KEYPAD_DIVIDE}, {5, KEYPAD_MULTIPLY}};
+std::map<int, ConsumerKeycode> consumerMapping = {{0, MEDIA_VOL_MUTE}};
+std::map<int, KeyboardKeycode> buttonMapping = {{5, KEY_INSERT}, {6, KEY_HOME}, {7, KEY_PAGE_UP},
+    {8, KEY_LEFT_ALT}, {9, KEY_DELETE}, {10, KEY_END}, {11, KEY_PAGE_DOWN}, {12, KEY_LEFT_SHIFT},
+    {14, KEY_UP_ARROW}, {16, KEY_LEFT_CTRL}, {17, KEY_LEFT_ARROW}, {18, KEY_DOWN_ARROW},
+    {19, KEY_RIGHT_ARROW}};
 
 void onKeyDown(int idx)
 {
@@ -35,9 +35,9 @@ void onKeyDown(int idx)
         auto key = buttonMapping[idx];
         out::cout << F("Sending ") << key << F(" ") << KeyboardKeycode((uint8_t)(key & 0xFF))
                   << out::endl;
-        //Keyboard.press(key);
+        Keyboard.press(key);
     } else if (consumerMapping.count(idx) > 0) {
-        //Consumer.write(consumerMapping[idx]);
+        Consumer.write(consumerMapping[idx]);
     }
 }
 
@@ -60,7 +60,7 @@ void onKeyUp(int idx)
     lcd.print(idx);
 
     if (buttonMapping.count(idx) > 0) {
-        //Keyboard.release(buttonMapping[idx]);
+        Keyboard.release(buttonMapping[idx]);
     }
     if (idx == 8) {
         pwd();
@@ -145,10 +145,10 @@ void checkLocks()
 {
     int lockLeds = 0;
     if (BootKeyboard.getLeds() & LED_CAPS_LOCK) {
-        lockLeds |= 2;
+        lockLeds |= 16;
     }
-    if (!(BootKeyboard.getLeds() & LED_NUM_LOCK)) {
-        lockLeds |= 4;
+    if (BootKeyboard.getLeds() & LED_NUM_LOCK) {
+        lockLeds |= 128;
     }
     if (BootKeyboard.getLeds() & LED_SCROLL_LOCK) {
         lockLeds |= 1;
