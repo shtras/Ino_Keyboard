@@ -54,11 +54,12 @@ void displayLoop();
 class LiquidCrystal : public Print
 {
 public:
+enum class BounceType{Bounce, Loop, None};
     LiquidCrystal(uint8_t latchPin, uint8_t clockPin, uint8_t dataPin);
 
     void init();
 
-    void begin(uint8_t cols, uint8_t rows, uint8_t charsize = LCD_5x8DOTS);
+    void begin();
 
     void clear();
     void home();
@@ -107,6 +108,8 @@ public:
     void setPersistentStrings(const __FlashStringHelper* upper, const __FlashStringHelper* lower);
     void setTimeout(unsigned long value);
     void displayLoop();
+    void shiftBounceType();
+    BounceType getBounceType();
 
     using Print::write;
 
@@ -114,6 +117,7 @@ private:
     class BouncyStr
     {
     public:
+    
         BouncyStr(int row);
         void bounce();
         void set(const __FlashStringHelper* val);
@@ -123,7 +127,7 @@ private:
         void display();
 
         int row_ = 0;
-        char str_[128];
+        char str_[64];
         int idx_ = 0;
         int dir_ = 1;
         int len_ = 0;
@@ -140,11 +144,9 @@ private:
     uint8_t enablePin_; // activated by a HIGH pulse.
     uint8_t dataPins_[4];
 
-    uint8_t displayFunction_;
     uint8_t displayControl_;
     uint8_t displayMode_;
 
-    uint8_t numLines_;
     uint8_t rowOffsets_[4];
 
     uint8_t latchPin_;
@@ -154,6 +156,7 @@ private:
     unsigned long displayTimeout_ = 0;
     BouncyStr upper_{0};
     BouncyStr lower_{1};
+    BounceType bounceType_ = BounceType::Loop;
 };
 
 #endif

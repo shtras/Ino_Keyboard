@@ -43,7 +43,8 @@ void mute()
     setLedAnimation({1, 9, 73, 219, 255, 0, 0, 0}, 5, 100);
 }
 
-std::map<int, BtnFunc> consumerMapping = {{0, &mute}};
+std::map<int, BtnFunc> consumerMapping = {{0, &mute}, {1, [](){Consumer.write(MEDIA_PREVIOUS);}},
+{2, [](){Consumer.write(MEDIA_PLAY_PAUSE);}},{3, [](){Consumer.write(MEDIA_NEXT);}}};
 
 void onKeyDown(int idx)
 {
@@ -79,7 +80,36 @@ void onKeyDown(int idx)
                 lcd.cprint(F("IR: "));
                 lcd.print(settings.irEnabled ? F("ON") : F("OFF"));
                 break;
+            case 7:
+                lcd.shiftBounceType();
+                lcd.cprint(F("Bounce: "));
+                switch (lcd.getBounceType()) {
+                    case LiquidCrystal::BounceType::Bounce:
+                        lcd.print("Bounce");
+                        break;
+                    case LiquidCrystal::BounceType::Loop:
+                        lcd.print("Loop");
+                        break;
+                    case LiquidCrystal::BounceType::None:
+                        lcd.print("None");
+                        break;
+                }
+                break;
+            case 8:
+                settings.keyboardEnabled = !settings.keyboardEnabled;
+                lcd.cprint(F("Keyboard: "));
+                lcd.print(settings.keyboardEnabled ? F("ON") : F("OFF"));
+                break;
+            case 9:
+                settings.randomLeds = !settings.randomLeds;
+                lcd.cprint(F("Rand LEDs: "));
+                lcd.print(settings.randomLeds ? F("ON") : F("OFF"));
+                break;
         }
+        return;
+    }
+
+    if (!settings.keyboardEnabled) {
         return;
     }
 
@@ -103,6 +133,10 @@ void onKeyUp(int idx)
     out::cout << F("Released ") << idx << out::endl;
 
     if (buttonState.at(fnBtn) == LOW) {
+        return;
+    }
+
+    if (!settings.keyboardEnabled) {
         return;
     }
 
@@ -177,24 +211,6 @@ void readMatrix()
     }
 }
 
-void printMatrix()
-{
-    return;
-    int buttonIdx = 0;
-    for (auto row : rows) {
-        if (row < 10) {
-            out::cout << F("0");
-        }
-        out::cout << row << F(": ");
-
-        for (auto col : cols) {
-            out::cout << buttonState.at(buttonIdx++) << F(", ");
-        }
-        out::cout << out::endl;
-    }
-    out::cout << out::endl;
-}
-
 void checkLocks()
 {
     int lockLeds = 0;
@@ -207,7 +223,7 @@ void checkLocks()
     if (BootKeyboard.getLeds() & LED_SCROLL_LOCK) {
         lockLeds |= 1;
     }
-    if (ledTimeout == 0) {
+    if (!settings.randomLeds && ledTimeout == 0) {
         setLeds(lockLeds, 0);
     }
 }

@@ -18,11 +18,11 @@ int ledAnimationCounter = 0;
 int ledAnimationLength = 0;
 int ledAnimationTimeout = 0;
 
-
 int persistentLedValue = 0;
 } // namespace
 
 unsigned long ledTimeout = 0;
+unsigned long randomTimeout = 0;
 
 void setupLeds()
 {
@@ -44,7 +44,6 @@ void setLedAnimation(std::array<int, 8> animation, int length, int timeout)
     ledAnimationCounter = 0;
     ledAnimationTimeout = timeout;
 }
-
 
 void setLeds(int value, int timeout)
 {
@@ -76,7 +75,10 @@ void blinkLed()
         setLeds(ledAnimation[ledAnimationCounter++], ledAnimationTimeout);
         return;
     }
-    if (ledTimeout && ledTimeout < millis()) {
+    if (ledTimeout == 0 && settings.randomLeds && randomTimeout < millis()) {
+        setLeds(rand() % 255, 0);
+        randomTimeout = millis() + 1000;
+    } else if (ledTimeout && ledTimeout < millis()) {
         setLeds(persistentLedValue, 0);
     }
 }

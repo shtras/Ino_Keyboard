@@ -7,6 +7,7 @@
 
 #include <IRremote.h>
 #include <ArduinoSTL.h>
+#include <MultiReport/ImprovedKeyboard.h>
 #include <MultiReport/Consumer.h>
 #include <map>
 
@@ -17,8 +18,10 @@ namespace pins
 const int ir = 16;
 }
 
-std::map<int, ConsumerKeycode> irMapping = {
-    {0x45, MEDIA_VOL_MUTE}, {0x44, MEDIA_PREVIOUS}, {0x40, MEDIA_PLAY_PAUSE}, {0x43, MEDIA_NEXT}};
+std::map<int, ConsumerKeycode> irConsumerMapping = {{0x45, MEDIA_VOL_MUTE}, {0x44, MEDIA_PREVIOUS},
+    {0x40, MEDIA_PLAY_PAUSE}, {0x43, MEDIA_NEXT}};
+
+std::map<int, KeyboardKeycode> irKeyboardMapping = {{0x7, KEY_LEFT_ARROW}, {0x9, KEY_RIGHT_ARROW}};
 
 decode_results results;
 uint16_t lastCommand = 0;
@@ -92,9 +95,11 @@ void checkIR()
     }
     if (commandRepeat == singleThreshold) {
         out::cout << F("Single") << out::endl;
-        if (irMapping.count(data.command) > 0) {
+        if (irConsumerMapping.count(data.command) > 0) {
             setLedAnimation({129, 66, 36, 24, 36, 66, 129, 0}, 7, 200);
-            Consumer.write(irMapping[data.command]);
+            Consumer.write(irConsumerMapping[data.command]);
+        } else if (irKeyboardMapping.count(data.command) > 0) {
+            Keyboard.write(irKeyboardMapping[data.command]);
         }
     }
 }

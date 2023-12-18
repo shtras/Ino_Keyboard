@@ -35,24 +35,12 @@ LiquidCrystal::LiquidCrystal(uint8_t latchPin, uint8_t clockPin, uint8_t dataPin
 
 void LiquidCrystal::init()
 {
-    displayFunction_ = LCD_4BITMODE | LCD_1LINE | LCD_5x8DOTS;
-
-    begin(16, 2);
+    begin();
 }
 
-void LiquidCrystal::begin(uint8_t cols, uint8_t lines, uint8_t dotsize)
+void LiquidCrystal::begin()
 {
-    if (lines > 1) {
-        displayFunction_ |= LCD_2LINE;
-    }
-    numLines_ = lines;
-
-    setRowOffsets(0x00, 0x40, 0x00 + cols, 0x40 + cols);
-
-    // for some 1 line displays you can select a 10 pixel high font
-    if ((dotsize != LCD_5x8DOTS) && (lines == 1)) {
-        displayFunction_ |= LCD_5x10DOTS;
-    }
+    setRowOffsets(0x00, 0x40, 0x00 + 16, 0x40 + 16);
 
     // SEE PAGE 45/46 FOR INITIALIZATION SPECIFICATION!
     // according to datasheet, we need at least 40ms after power rises above 2.7V
@@ -81,7 +69,7 @@ void LiquidCrystal::begin(uint8_t cols, uint8_t lines, uint8_t dotsize)
     write4bits(0x02);
 
     // finally, set # lines, font size, etc.
-    command(LCD_FUNCTIONSET | displayFunction_);
+    command(LCD_FUNCTIONSET | LCD_4BITMODE | LCD_1LINE | LCD_5x8DOTS | LCD_2LINE);
 
     // turn the display on with no cursor or blinking default
     displayControl_ = LCD_DISPLAYON | LCD_CURSOROFF | LCD_BLINKOFF;
@@ -123,8 +111,8 @@ void LiquidCrystal::setCursor(uint8_t col, uint8_t row)
     if (row >= max_lines) {
         row = max_lines - 1; // we count rows starting w/0
     }
-    if (row >= numLines_) {
-        row = numLines_ - 1; // we count rows starting w/0
+    if (row >= 2) {
+        row = 1; // we count rows starting w/0
     }
 
     command(LCD_SETDDRAMADDR | (col + rowOffsets_[row]));
@@ -242,7 +230,6 @@ void LiquidCrystal::flushPins()
     digitalWrite(latchPin_, HIGH);
 }
 
-// write either command or data, with automatic 4/8-bit selection
 void LiquidCrystal::send(uint8_t value, uint8_t mode)
 {
     rsPin_ = mode;
@@ -278,7 +265,7 @@ void LiquidCrystal::write4bits(uint8_t value)
 
 namespace
 {
-const int bounceInterval = 450;
+constexpr int bounceInterval = 450;
 }
 
 void LiquidCrystal::displayLoop()
@@ -309,13 +296,39 @@ void LiquidCrystal::setTimeout(unsigned long value)
     displayTimeout_ = value;
 }
 
+void LiquidCrystal::shiftBounceType()
+{
+    switch (bounceType_) {
+        case BounceType::Bounce:
+            bounceType_ = BounceType::Loop;
+            break;
+        case BounceType::Loop:
+            bounceType_ = BounceType::None;
+            break;
+        case BounceType::None:
+            bounceType_ = BounceType::Bounce;
+            break;
+        default:
+            bounceType_ = BounceType::Bounce;
+            break;
+    }
+    upper_.reset();
+    lower_.reset();
+}
+
+LiquidCrystal::BounceType LiquidCrystal::getBounceType()
+{
+    return bounceType_;
+}
+
 void displayLoop()
 {
     lcd.displayLoop();
 }
 
 LiquidCrystal::BouncyStr::BouncyStr(int row)
-    : row_(row), bounceTime_(millis() + bounceInterval)
+    : row_(row)
+    , bounceTime_(millis() + bounceInterval)
 {
 }
 
@@ -328,12 +341,27 @@ void LiquidCrystal::BouncyStr::bounce()
         return;
     }
     bounceTime_ = millis() + bounceInterval;
+    switch (lcd.getBounceType()) {
+        case LiquidCrystal::BounceType::Bounce:
+            if (dir_ < 0 && idx_ <= 0) {
+                dir_ = 1;
+            }
+            if (dir_ > 0 && idx_ >= len_ - 16) {
+                dir_ = -1;
+            }
 
-    if (dir_ < 0 && idx_ <= 0) {
-        dir_ = 1;
-    }
-    if (dir_ > 0 && idx_ >= len_ - 16) {
-        dir_ = -1;
+            break;
+        case LiquidCrystal::BounceType::Loop:
+            dir_ = 1;
+            if (idx_ >= len_ - 8) {
+                idx_ = 0;
+            }
+            break;
+        case LiquidCrystal::BounceType::None:
+            dir_ = 0;
+            break;
+        default:
+            break;
     }
     idx_ += dir_;
     display();
@@ -341,22 +369,25 @@ void LiquidCrystal::BouncyStr::bounce()
 
 void LiquidCrystal::BouncyStr::set(const __FlashStringHelper* val)
 {
-    len_ = strlen_P(reinterpret_cast<const char*>(val));
-    strncpy_P(str_, reinterpret_cast<const char*>(val), sizeof(str_) - 1);
+    const char* c = reinterpret_cast<const char*>(val);
+    len_ = strlen_P(c);
+    strncpy_P(str_, c, sizeof(str_));
     display();
 }
 
 void LiquidCrystal::BouncyStr::reset()
 {
     idx_ = 0;
+    dir_ = 1;
     display();
 }
 
 void LiquidCrystal::BouncyStr::display()
 {
     lcd.setCursor(0, row_);
-    auto c = str_[idx_ + 16];
-    str_[idx_ + 16] = '\0';
+    int lastChar = std::min(idx_ + 16, len_);
+    auto c = str_[lastChar];
+    str_[lastChar] = 0;
     lcd.print(str_ + idx_, 0);
-    str_[idx_ + 16] = c;
+    str_[lastChar] = c;
 }
